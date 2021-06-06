@@ -1,0 +1,101 @@
+# Creating new namespace to use for all the resources for this project
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: experian-namespace
+---
+
+# Creating daemonSet to create pods on each available worker node in K8s cluster
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    app: experian
+  name: experian-daemonset
+  namespace: experian-namespace
+spec:
+  selector:
+    matchLabels:
+      app: experian
+  template:
+    metadata:
+      labels:
+        app: experian 
+    spec:
+      containers:
+      - image: paulbouwer/hello-kubernetes:1.10.0@sha256:09c24b19bebb08f052ae939eafc1afb9184fc41a
+        name: experian-pod
+        imagePullPolicy: Always
+        ports:
+           - containerPort: 8080
+        env:
+          - name: KUBERNETES_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: KUBERNETES_NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+        resources:
+          # Limit of resources container is allowed to request over the resources its alreayd using on the node
+          requests:
+            memory: 128Mi
+            cpu: 256m
+          # Limit of max resources allowed for a container on the node
+          limits:
+            memory: 256Mi
+            cpu: 512m
+        # Condition to check if the application is ready to start serving traffic
+        readinessProbe:
+          initialDelaySeconds: 5 # length of time to wait for a pod to initialize after pod startup, before applying health check
+          timeoutSeconds: 1  # Amount of time to wait before timing out
+          # Probe for http
+          httpGet:
+            path: / # Path to probe
+            port: 8080 # Port to probe
+        # Condition to check if the application is responsive and running
+        livenessProbe:
+          initialDelaySeconds: 5 # length of time to wait for a pod to initialize after pod startup, before applying health check
+          periodSeconds: 5 # How often (in seconds) to perform the probe.
+          timeoutSeconds: 1 # Amount of time to wait before timing out
+          failureThreshold: 3 # Number of times before restarting the Pod
+          # Probe for http
+          httpGet: 
+            path: /  # Path to probe
+            port: 8080   # Port to probe
+      terminationGracePeriodSeconds: 30
+---
+
+# Creating new service to expose experian-devops
+apiVersion: v1
+kind: Service
+metadata:
+  name: experian-service
+  labels:
+    app: experian
+  namespace: experian-namespace
+spec:
+  ports:
+  - port: 8081 # Port to access this service
+    targetPort: 8080 # Port of deployment to expose
+  selector:
+    app: experian # Selector to decide which deployment to use this service with based on labels
+---
+
+# Creating new ingress for experians-service
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: experian-ingress
+  namespace: experian-namespace
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /
+        backend:
+          serviceName: experian-service
+          servicePort: 8081
