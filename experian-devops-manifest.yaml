@@ -23,7 +23,7 @@ spec:
         app: experian 
     spec:
       containers:
-      - image: paulbouwer/hello-kubernetes:1.10.0@sha256:09c24b19bebb08f052ae939eafc1afb9184fc41a
+      - image: paulbouwer/hello-kubernetes:1.10.0
         name: experian-pod
         imagePullPolicy: Always
         ports:
